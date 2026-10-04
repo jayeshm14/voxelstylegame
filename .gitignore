@@ -1,0 +1,63 @@
+# ── Node / npm ───────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build output (Vite + tsc)
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# Vite
+.vite/
+
+# ── Tests / coverage ─────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+*.lcov
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OpenCode ─────────────────────────────────────────────────────────────────
+# Keep project slash commands; ignore local agent state (may hold credentials).
+.opencode/*
+!.opencode/commands/
+
+# ── Spec Kit ─────────────────────────────────────────────────────────────────
+# .specify/feature.json and per-machine extension overrides are already
+# covered by .specify/.gitignore.
