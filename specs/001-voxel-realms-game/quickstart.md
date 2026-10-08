@@ -122,6 +122,45 @@ SC-010).
 discrete GPU, no more than five years old at measurement time, at default
 settings. Results from any other machine are informational only.
 
+### SC-002 evidence — 2026-10-06 (source phase 4)
+
+SC-002 reads *"byte-identical every time"*. That claim has three distinct ways
+to fail, so `tests/seed-reproducibility.test.ts` tests them separately rather
+than as one assertion:
+
+| Half | Mechanism | Result |
+|---|---|---|
+| ≥10 consecutive runs | 10 calls over 6 regions, each run visiting the regions in a *different* order, comparing **whole block arrays** region by region against run 1 | PASS — 32,768 × 6 × 10 bytes compared, 0 differences |
+| Across a restart | `vi.resetModules()` then a re-import, so the factory used afterwards is a different function object (asserted) — a module retaining state across a reload is exactly what this catches | PASS — `reloaded.generateChunk !== generateChunk` held; all 6 arrays equal |
+| Across processes | the suite run twice by two separate `vitest` processes, manifests diffed mechanically | PASS — `Compare-Object` output empty |
+| Seed is load-bearing | same 6 regions under `SEED + 1` must *not* match | PASS — no region coincided |
+
+Cross-process manifest, captured from two independent runs — both processes
+printed these six lines and the diff between them was empty:
+
+```text
+SEED 123456789 MANIFEST
+  region ( 0,  0) -> 1460204569
+  region ( 1,  0) -> 1260073459
+  region ( 0,  1) -> 460910421
+  region (-1, -1) -> 4284780635
+  region ( 3, -7) -> 2298690866
+  region (-5,  2) -> 2718511272
+```
+
+The six regions were chosen for coverage rather than convenience: the origin,
+its right-hand neighbour (the FR-005 straddling-trees case), a z-only step, a
+doubly-negative region, and two with mixed-sign coordinates that exercise the
+negative-x path through `chunkCoordOf`. The same six digests are committed as
+the test's own expected values, so a *third* process — CI, another machine, a
+release build — is checked by the test itself rather than by comparing output
+by eye.
+
+The `(0, 0)` value is the same `GOLDEN_HASH` asserted in
+`tests/golden-hash.test.ts`; the two suites overlap deliberately. The golden
+hash asks *"did generation change?"*, this one asks *"does it change between
+runs?"* — a single constant answers only the first.
+
 ---
 
 ## 6. Targeted verification of the constitution-critical properties
@@ -181,3 +220,77 @@ commands actually executed and observed.
 PHASE n: DONE | typecheck PASS | tests PASS (N passed) | build PASS
 VERIFY: <SC or property> | <command or manual steps> | <observed output> | PASS|FAIL|UNVERIFIED
 ```
+
+### Phase 1 evidence — 2026-10-06
+
+Executed on the reference machine (Windows, Node v24.11.0, npm 11.6.1) in the
+constitution's order: `typecheck → test → build`, preceded by `npm ci`. Exit
+codes below are the real process exit codes.
+
+`npm ci` — **exit 0**
+
+```text
+added 100 packages, and audited 101 packages in 11s
+
+13 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (2 moderate, 1 high, 2 critical)
+```
+
+`npm run typecheck` — **exit 0**, no diagnostics emitted
+
+```text
+> voxel-realms@0.1.0 typecheck
+> tsc --noEmit
+```
+
+`npm test` — **exit 0**
+
+```text
+> voxel-realms@0.1.0 test
+> vitest run
+
+ RUN  v2.1.2 G:/Projects/Minecraft clone
+
+include: tests/**
+No test files found, exiting with code 0
+```
+
+`npm run build` — **exit 0**
+
+```text
+> voxel-realms@0.1.0 build
+> vite build
+
+vite v5.4.8 building for production...
+transforming...
+✓ 1 modules transformed.
+dist/index.html  0.57 kB │ gzip: 0.38 kB
+✓ built in 224ms
+```
+
+**Notes**
+
+- `tests PASS (0 passed)` at Phase 1 is literal and expected: the project has no
+  test files yet, and `passWithNoTests: true` in `vite.config.ts` is what lets
+  the mandated command succeed on an empty project. See `docs/TECHNICAL_DECISIONS.md`
+  TD-002. The flag stops mattering the moment `tests/coordinate.test.ts` lands
+  in Phase 2b.
+- The build transformed **1 module** — `index.html` alone. No script entry
+  exists yet; see TD-003.
+- The 5 vulnerabilities are all in the **development toolchain** (`vite`,
+  `vitest`, `esbuild`, `tinypool`, `@vitest/mocker`). The single runtime
+  dependency, `three`, is clean, and nothing in the toolchain ships in `dist/`.
+  Non-major fixes exist but are blocked by the constitution's exact pins; see
+  TD-005.
+- No result is recorded as PASS here beyond these four commands. The browser
+  walkthrough and the 14 success criteria are **UNVERIFIED** at this phase.
+- **Re-run 2026-10-06, after review fixes** to `src/core/GameConfig.ts`
+  (`AUDIO.EFFECTS`, `MAX_RETAINED_REGIONS`, `BIOME`, header) and
+  `src/utils/Mathx.ts` (`floorMod` negative zero, fractional input): all three
+  commands again exit **0** with identical output — `tsc --noEmit` silent,
+  `No test files found, exiting with code 0`, `1 modules transformed` /
+  `dist/index.html 0.57 kB`. Only the build wall-clock differs (73 ms), which is
+  not a result. Choices made in that pass: `docs/TECHNICAL_DECISIONS.md` TD-006
+  and TD-007.

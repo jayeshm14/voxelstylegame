@@ -75,7 +75,7 @@ record and takes the corruption path (FR-024).
 
 | Field | Type | Constraints | Source |
 |---|---|---|---|
-| `id` | integer 0–13 | Immutable; AIR = 0, WATER = 7, SNOW = 13 | spec §5 |
+| `id` | integer 0–14 | Immutable; AIR = 0, WATER = 7, SNOW = 13, TORCH = 14 | spec §5, FR-044 |
 | `name` | string | Unique | spec §5 |
 | `hardness` | number ≥ 0 | WATER is unbreakable | spec §5 |
 | `solid` | boolean | Drives collision | FR-006 |

@@ -24,6 +24,17 @@
 | 11 | PLANK | 2.0 | yes | no | axe | 0 | PLANK |
 | 12 | BRICK | 2.0 | yes | no | pickaxe | 1 | BRICK |
 | 13 | SNOW | 0.2 | yes | no | — | 0 | SNOW |
+| 14 | TORCH | 0.1 | no | yes | — | 0 | TORCH |
+
+**Id 14 (TORCH) — why the table now runs to 14.** FR-044 states that block light
+*"is emitted by a placed light-emitting block"* and `data-model.md` §8 states
+that `light` is *"a pure function of `blocks` alone"*. Both together require the
+torch to occupy a cell in `blocks`, which requires an id. The id is **appended**
+and existing ids are untouched — nothing is shipped, so no world's bytes can be
+invalidated. `TORCH` is `solid: no` (a player walks through the cell it holds)
+and `transparent: yes` (it neither shadows the column it sits in nor blocks the
+light it emits). Its light level is `LIGHT.TORCH_LEVEL` in `GameConfig`, not a
+literal here. See TD-023.
 
 **Culling rule** (FR-014): a face is emitted iff the neighbour is AIR, **or**
 the neighbour is transparent **and** the neighbour id differs from this id.
@@ -52,6 +63,12 @@ Blocks with a minimum tier drop **nothing** when broken at a lower tier.
 
 Block items reuse their block id (1–13). Non-block ids begin at 100, so the two
 ranges can never collide.
+
+**TORCH is the single exception to both statements.** Its *block* id is **14**
+(see the registry table above) while its *item* id is **103**, the "placeable
+block proxy" listed above — an id assigned when FR-044's torch had no block to
+sit in. Breaking a torch yields item 103; placing item 103 writes block 14. No
+other item at or above 100 maps to a block, so no id is claimed twice.
 
 ---
 
@@ -119,7 +136,7 @@ requires no positional crafting.
 
 | Check | Failure meaning |
 |---|---|
-| Block ids 0–13 contiguous, no duplicates | Registry corrupted |
+| Block ids 0–14 contiguous, no duplicates | Registry corrupted |
 | Item ids disjoint from block ids | Id collision |
 | Every `minTier` value has a matching tool tier | Tier gate unreachable |
 | Every recipe multiset unique | Ambiguous crafting (R15 regression) |

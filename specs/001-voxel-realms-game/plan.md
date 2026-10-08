@@ -68,9 +68,10 @@ tunables in one configuration module (Constitution III); no `Math.random()`,
 `Date.now()` or `performance.now()` in world, gameplay-logic or test code
 (Constitution I)
 
-**Scale/Scope**: 12 `src/` modules, 14 block ids (0–13), 10 item types,
-10 recipes, 5 biomes, 1 creature kind, 16 implementation phases, 45 functional
-requirements, 14 success criteria, 12 required test suites
+**Scale/Scope**: 12 `src/` modules, 15 block ids (0–14; id 14 = TORCH added by
+FR-044, see TD-023), 10 item types, 10 recipes, 5 biomes, 1 creature kind, 16
+implementation phases, 45 functional requirements, 14 success criteria, 12
+required test suites
 
 ## Constitution Check
 
