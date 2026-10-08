@@ -31,6 +31,11 @@
 - Q: What should the shadows and particles settings actually control, given that no requirement anywhere defines a shadow or a particle? → A: Particles become live as visual-only feedback; the shadows control is removed from FR-034 — a shadow map was judged too risky for the SC-003 frame budget on the stated reference machine (FR-034 amended, new FR-045)
 - Q: How closely must the player's jump apex match the height predicted by the configured jump velocity and gravity for acceptance scenario 3 to pass? → A: No tolerance — name the integration scheme and constants in Documented Values and assert the exact apex that scheme produces, derived from the documented scheme rather than read back from the implementation (US1 amended)
 
+### Session 2026-10-08
+
+- Q: No task in `tasks.md` boots the game or draws the world — how should that missing integration work enter scope? → A: Add a new FR to this spec, then append the task(s) to `tasks.md` under the chosen source phase with IDs allocated after T132, so no existing Task ID is renumbered (new FR-046)
+- Q: Which source phase should deliver the FR-046 composition-root and terrain-draw tasks? → A: Source phase 6 — boot straight into a generated world, and let source phase 13 later insert the main menu in front of the same entry point, so every phase from 6 onward is observable in a browser (tasks T133–T134 appended to source phase 6)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Enter and explore a new world (Priority: P1)
@@ -351,7 +356,8 @@ play. Deliverable value: the player can adapt the game to their machine.
 > topic rather than by number. FR-043, FR-044 and FR-045 were introduced by later
 > clarification sessions and therefore sit beside the requirements they amend —
 > FR-044 after FR-029 (lighting and the day-night cycle), FR-043 and FR-045 after
-> FR-037 (interface and presentation). Read the identifiers, not the sequence.
+> FR-037 (interface and presentation). FR-046 sits after FR-040, the requirement
+> it makes observable. Read the identifiers, not the sequence.
 
 **World creation and generation**
 
@@ -585,6 +591,20 @@ play. Deliverable value: the player can adapt the game to their machine.
   break, place, craft, save, reload, load — with no errors surfaced to the player
   on the nominal path; the recovery messages required by SC-008 and FR-022 are
   not errors and do not count against this requirement.
+- **FR-046**: The game MUST be runnable from the delivered page with no
+  installation step. Exactly one entry point may start it — one place that
+  connects the simulation, the rendering, the world and the player's input, and
+  then begins play — and nothing else in the product may start a session or
+  connect those parts together. The path from a region the world has loaded to
+  the picture on screen MUST be complete within the same requirement: every such
+  region is drawn, and a region that leaves the retained view distance has its
+  rendering resources released (FR-039). This is the precondition for FR-030,
+  FR-040 and every US1 acceptance scenario — until it exists the delivered page
+  shows an empty element and none of them can be observed — so its absence is a
+  missing requirement, not an exemption granted by a completed phase gate. The
+  entry point MUST be independent of FR-030: the main menu, when present, is a
+  screen it shows before play begins and never a second entry point, so there is
+  exactly one place that connects the parts however a session starts.
 
 **Accessibility**
 

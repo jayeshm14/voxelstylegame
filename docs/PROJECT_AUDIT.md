@@ -43,12 +43,12 @@ Phase 1 gate meaningful:
 | Artifact | State |
 |---|---|
 | `.specify/memory/constitution.md` | ratified, v1.0.0 — 11 gates |
-| `specs/001-voxel-realms-game/spec.md` | 45 FRs, 14 SCs, 7 stories, 26 edge cases |
+| `specs/001-voxel-realms-game/spec.md` | 46 FRs, 14 SCs, 7 stories, 26 edge cases |
 | `specs/001-voxel-realms-game/plan.md` | 11/11 constitution gates PASS |
 | `specs/001-voxel-realms-game/research.md` | R1–R18 resolved |
 | `specs/001-voxel-realms-game/data-model.md` | 11 sections |
 | `specs/001-voxel-realms-game/contracts/` | 5 contracts |
-| `specs/001-voxel-realms-game/tasks.md` | 132 tasks, T001–T132 |
+| `specs/001-voxel-realms-game/tasks.md` | 134 tasks, T001–T134 (T133–T134 sit in source phase 6 — IDs are never renumbered) |
 | `specs/001-voxel-realms-game/quickstart.md` | 10-step walkthrough, 14-row SC matrix |
 | `specs/001-voxel-realms-game/checklists/` | `requirements.md` 16/16, `spec-quality.md` 40/40 |
 

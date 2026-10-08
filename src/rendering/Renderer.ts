@@ -20,8 +20,10 @@
  */
 
 import * as THREE from 'three'
-import { PARTICLES, TIME } from '../core/GameConfig'
+import { PARTICLES, SEED, TIME, WORLD } from '../core/GameConfig'
 import { hash32 } from '../utils/Hash'
+import { type MeshData, type RegionMesh } from './ChunkMesher'
+import { createAtlasTexture } from './TextureAtlas'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Particle derivation — pure, hash-driven, no clock
@@ -273,6 +275,60 @@ const KIND_COLOR: Readonly<Record<ParticleKind, number>> = Object.freeze({
 })
 
 /**
+ * The two objects one region contributes to the scene: an opaque mesh and a
+ * transparent one, as `plan.md` requires (*"Separate geometry per chunk into
+ * two meshes"*).
+ */
+interface RegionObjects {
+  readonly opaque: THREE.Mesh
+  readonly transparent: THREE.Mesh
+}
+
+/**
+ * Map key for a region. The map is private to `Renderer`, so this needs only to
+ * be unique per `(cx, cz)` and not to match `World.key`'s encoding.
+ */
+function regionKey(cx: number, cz: number): string {
+  return `${String(cx)},${String(cz)}`
+}
+
+/**
+ * TD-027: `MeshData.light` carries **one** float per vertex — the shaded
+ * illumination — while three.js's `vertexColors` reads a `vec3`. Widening at
+ * this boundary keeps the authored buffer at a third of the size for a channel
+ * that is greyscale by definition, and confines knowledge of three.js's
+ * attribute layout to the one place that uploads it.
+ */
+function widenLightToColor(light: Float32Array): Float32Array {
+  const color = new Float32Array(light.length * 3)
+  for (let i = 0; i < light.length; i++) {
+    const value = light[i] as number
+    const o = i * 3
+    color[o] = value
+    color[o + 1] = value
+    color[o + 2] = value
+  }
+  return color
+}
+
+/**
+ * Turn one half of a `RegionMesh` into drawable geometry.
+ *
+ * Positions are region-local (`0…16` in x and z), so the owning object carries
+ * the world offset — which is what lets a region be released by dropping an
+ * object rather than by rewriting its vertices.
+ */
+function geometryFrom(data: MeshData): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3))
+  geometry.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3))
+  geometry.setAttribute('uv', new THREE.BufferAttribute(data.uvs, 2))
+  geometry.setAttribute('color', new THREE.BufferAttribute(widenLightToColor(data.light), 3))
+  geometry.setIndex(new THREE.BufferAttribute(data.indices, 1))
+  return geometry
+}
+
+/**
  * Owns the WebGL drawing buffer. `plan.md` calls this the render target: it is
  * sized once per resize, never re-allocated per frame.
  */
@@ -291,7 +347,20 @@ export class Renderer {
   readonly #color = new THREE.Color()
   #particlesEnabled = true
 
-  constructor(canvas: HTMLCanvasElement) {
+  /** Shared across every region — a material per region would defeat batching. */
+  readonly #atlas: THREE.Texture
+  readonly #opaqueMaterial: THREE.MeshLambertMaterial
+  readonly #transparentMaterial: THREE.MeshLambertMaterial
+  /** Region key → its objects, so a release can find and dispose them. */
+  readonly #regions = new Map<string, RegionObjects>()
+
+  /**
+   * @param canvas the surface to draw into
+   * @param seed   world seed the atlas is generated from — `TextureAtlas` derives
+   *               one independent PRNG stream per slot from it, so the same
+   *               world always looks the same
+   */
+  constructor(canvas: HTMLCanvasElement, seed: number = SEED.DEFAULT) {
     this.scene = new THREE.Scene()
     this.ambient = new THREE.AmbientLight(0xffffff, 1)
     this.directional = new THREE.DirectionalLight(0xffffff, 1)
@@ -302,12 +371,91 @@ export class Renderer {
 
     this.particles = new ParticleRing()
 
+    this.#atlas = createAtlasTexture(seed)
+    // TD-026: Lambert is the only built-in that multiplies vertex colour by the
+    // scene lights, and it reads `normal` — which is why the mesher emits one.
+    this.#opaqueMaterial = new THREE.MeshLambertMaterial({
+      map: this.#atlas,
+      vertexColors: true,
+    })
+    this.#transparentMaterial = new THREE.MeshLambertMaterial({
+      map: this.#atlas,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+    })
+
     const geometry = new THREE.PlaneGeometry(0.12, 0.12)
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
     this.#mesh = new THREE.InstancedMesh(geometry, material, this.particles.capacity)
     this.#mesh.frustumCulled = false
     this.#mesh.count = 0
     this.scene.add(this.#mesh)
+  }
+
+  // ── FR-046 / FR-039: the region draw path ──────────────────────────────────
+
+  /** Regions currently represented in the scene. */
+  get regionCount(): number {
+    return this.#regions.size
+  }
+
+  /**
+   * Build or rebuild the draw state for one region.
+   *
+   * Rebuilding an already-drawn region **replaces** rather than accumulates:
+   * `ChunkManager.mesh()` remeshes whenever a block changes, so a path that
+   * simply added meshes would leak a geometry on every block placed (FR-039
+   * bounds *retained* regions, not meshes per region).
+   *
+   * The object sits at `(cx × 16, 0, cz × 16)` because the mesher writes
+   * positions in region-local coordinates.
+   */
+  upsertRegion(cx: number, cz: number, mesh: RegionMesh): void {
+    const key = regionKey(cx, cz)
+    this.releaseRegion(cx, cz)
+
+    const opaque = new THREE.Mesh(geometryFrom(mesh.opaque), this.#opaqueMaterial)
+    const transparent = new THREE.Mesh(geometryFrom(mesh.transparent), this.#transparentMaterial)
+    const offsetX = cx * WORLD.REGION_SIZE_X
+    const offsetZ = cz * WORLD.REGION_SIZE_Z
+    opaque.position.set(offsetX, 0, offsetZ)
+    transparent.position.set(offsetX, 0, offsetZ)
+
+    this.scene.add(opaque, transparent)
+    this.#regions.set(key, { opaque, transparent })
+  }
+
+  /**
+   * Dispose one region's geometry and drop it from the scene — FR-039's
+   * "disposes their rendering resources" half, called for every region
+   * `ChunkManager.unload()` evicts.
+   *
+   * Materials and the atlas are shared, so they are deliberately *not* disposed
+   * here: doing so would blank every other region on screen.
+   */
+  releaseRegion(cx: number, cz: number): void {
+    const key = regionKey(cx, cz)
+    const objects = this.#regions.get(key)
+    if (objects === undefined) return
+
+    objects.opaque.geometry.dispose()
+    objects.transparent.geometry.dispose()
+    objects.opaque.removeFromParent()
+    objects.transparent.removeFromParent()
+    this.#regions.delete(key)
+  }
+
+  /** Release every region — used when leaving a world, never during play. */
+  releaseAllRegions(): void {
+    for (const key of [...this.#regions.keys()]) {
+      const objects = this.#regions.get(key) as RegionObjects
+      objects.opaque.geometry.dispose()
+      objects.transparent.geometry.dispose()
+      objects.opaque.removeFromParent()
+      objects.transparent.removeFromParent()
+      this.#regions.delete(key)
+    }
   }
 
   /** Size the drawing buffer; call on construction and on `resize`. */
@@ -374,8 +522,12 @@ export class Renderer {
     this.gl.render(this.scene, camera)
   }
 
-  /** Release GPU resources. Safe to call more than once. */
+  /** Release GPU resources, regions first so nothing outlives its material. Safe to call more than once. */
   dispose(): void {
+    this.releaseAllRegions()
+    this.#opaqueMaterial.dispose()
+    this.#transparentMaterial.dispose()
+    this.#atlas.dispose()
     this.#mesh.geometry.dispose()
     if (Array.isArray(this.#mesh.material)) {
       for (const m of this.#mesh.material) m.dispose()

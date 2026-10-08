@@ -70,7 +70,7 @@ tunables in one configuration module (Constitution III); no `Math.random()`,
 
 **Scale/Scope**: 12 `src/` modules, 15 block ids (0–14; id 14 = TORCH added by
 FR-044, see TD-023), 10 item types, 10 recipes, 5 biomes, 1 creature kind, 16
-implementation phases, 45 functional requirements, 14 success criteria, 12
+implementation phases, 46 functional requirements, 14 success criteria, 12
 required test suites
 
 ## Constitution Check
@@ -186,9 +186,10 @@ specs/001-voxel-realms-game/
 ### Source Code (repository root)
 
 ```text
-index.html
+index.html                 # loads the single module entry, src/main.ts (FR-046)
 
 src/
+├── main.ts                # Composition root: constructs and connects every subsystem, starts the loop (FR-046)
 ├── core/
 │   ├── GameConfig.ts        # Sole home for every tunable (Constitution III)
 │   ├── GameLoop.ts          # Fixed 20 ticks/s accumulator; dt source of truth

@@ -62,11 +62,15 @@ gives the same answer regardless of the order cells are visited.
 
 ## Physics
 
-Axis-separated AABB collision — resolve X, then Z, then Y — so the player slides
-along walls and steps up single-block ledges. Jumping uses semi-implicit
-(symplectic) Euler stepped at the tick rate: velocity updated from gravity
-first, then position from the updated velocity, exactly once per tick. That
-makes the jump apex a single reproducible value asserted with no tolerance.
+Axis-separated AABB collision — resolve **Y, then X, then Z** — so the player
+lands before anything horizontal is considered, then slides along walls and
+steps up single-block ledges. Y first is what lets a fall and a stride in the
+same tick settle onto the ground before the stride is applied; X before Z fixes
+the tie-break when both are blocked together, so the outcome never depends on
+the order a caller listed its axes in. Jumping uses semi-implicit (symplectic)
+Euler stepped at the tick rate: velocity updated from gravity first, then
+position from the updated velocity, exactly once per tick. That makes the jump
+apex a single reproducible value asserted with no tolerance.
 
 ## Persistence
 

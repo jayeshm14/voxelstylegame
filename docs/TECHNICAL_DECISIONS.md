@@ -76,24 +76,32 @@ requires, and record the gap here rather than silently inventing a task.
   constitution forbids, and would still need a task to fill it in.
 - *Add a `T133` for the composition root* — task IDs are frozen; appending an
   ID would also require re-validating the dependency, parallel and coverage
-  tables in `tasks.md`.
+  tables in `tasks.md`. **Taken on 2026-10-08 after all** (see *Resolved* below):
+  a brand-new ID is not a renumbering, and the dependency, phase, US1-coverage
+  and MVP-scope tables were re-validated as part of adding it.
 
 The gap belongs to the task list, not to the code, so it is escalated rather
 than absorbed.
 
-**Action required.** Before Phase 10 (source phase 13, where the main menu lands
-and US1 becomes playable), the composition root must exist: `src/main.ts`
-importing `GameState`, `GameLoop` and `src/ui/MainMenu.ts`, plus the matching
-`<script type="module" src="/src/main.ts">` in `index.html`. Route this through
-`/speckit.clarify` or a `/speckit.tasks` refresh so the task list — not this
-file — carries it.
+**Resolved 2026-10-08 — `/speckit.clarify` session 3.** The escalation this
+entry made was accepted: **FR-046** now requires that the game be runnable from
+the delivered page through exactly one entry point, and **T133–T134** carry the
+work — `src/main.ts` plus the `<script type="module" src="/src/main.ts">` in
+`index.html`, and the region draw path in `src/rendering/Renderer.ts`. Both sit
+in **source phase 6**, not the Phase 10 this entry predicted: every subsystem the
+root must connect already exists after source phase 5, and landing it there makes
+phases 6–12 observable in a browser rather than test-only. IDs were allocated
+*after* T132 precisely because they are frozen — no existing Task ID moved, which
+is why the new IDs are out of sequence with their position in `tasks.md`.
 
-**Blast radius.** `index.html`. Until the root exists, `npm run preview` serves
-a shell with no game; the Phase 16 acceptance walkthrough cannot start.
+**Blast radius.** `index.html`, `src/main.ts`, `src/rendering/Renderer.ts`,
+`plan.md` Project Structure (both files now listed), and `tasks.md` (US1 coverage
+and MVP-scope rows now cite T133–T134). Until T134 lands, `npm run preview`
+serves a shell with no game.
 
-**Revisit if:** the task list is refreshed (then delete this entry and point at
-the new task ID), or if a decision is taken to bootstrap from a side-effect
-import instead.
+**Revisit if:** the task list is regenerated rather than appended to — then
+T133–T134 must be re-checked against FR-046 rather than assumed to have
+survived.
 
 ### TD-004 · `build` does not re-run the type checker
 
@@ -1051,3 +1059,142 @@ later phase and exercised end to end by T108. It reads `World.values()` and
 **Revisit if:** the world extent ever stops being 16 × 16 — the square-retention
 arithmetic and the "retention never binds at maximum view distance" observation
 both depend on it, and T108's enforcement test would need to change with them.
+
+---
+
+### TD-032 · Physics constants: the prompt where the spec is silent, the spec where it speaks; a clear move applied whole
+
+**Context.** Source prompt §3 fixes a column of constants and §8 fixes the
+collision algorithm; `spec.md`'s *Documented Values* fixes its own set. The two
+mostly agree, but not always, and a game that reads two conflicting values for
+the same quantity has no reproducible behaviour to assert.
+
+**Decision.** Where `spec.md` is silent, the prompt's value is adopted verbatim
+into `src/core/GameConfig.ts`:
+
+| constant | value | why this source |
+|---|---|---|
+| `PLAYER.WIDTH` / `HALF_WIDTH` | 0.6 / 0.3 | prompt §3; spec never sizes the body |
+| `PLAYER.HEIGHT` / `EYE_HEIGHT` | 1.8 / 1.62 | prompt §3; FR-010 needs an eye height |
+| `PLAYER.WALK_SPEED` / `SPRINT_SPEED` | 4.3 / 5.6 | prompt §3; spec gives 40% swim *ratio*, not absolute speeds |
+| `PHYSICS.TERMINAL_VELOCITY` | 78 | prompt §3; spec sets no fall cap |
+| `PHYSICS.MAX_SUBSTEP` | 0.25 | prompt §8's per-substep displacement cap |
+| `PHYSICS.CONTACT_EPSILON` | 1e-4 | prompt §8's grounding probe distance |
+
+Where the two **disagree**, the spec wins — the same precedence that already put
+jump velocity at 10 rather than the prompt's 9 and max health at 10 rather than
+20:
+
+| constant | spec | prompt | taken |
+|---|---|---|---|
+| `PHYSICS.STEP_UP_HEIGHT` | **1 block** | 0.6 (`STEP_HEIGHT`) | **1** |
+
+One block is what *Documented Values*, `GameConfig` and T043 all say, and it is
+the value the "small ledges need no jump" claim in FR-007 depends on; 0.6 would
+have made full blocks unsteppable.
+
+**Three consequent choices.**
+
+1. **No acceleration or friction model.** The prompt's `GROUND_ACCEL`,
+   `AIR_ACCEL` and `GROUND_FRICTION` are deliberately *not* adopted. `spec.md`
+   describes walking, sprinting and swimming as speeds and never mentions a rate
+   of change, so an added ramp would be an invented rule rather than a
+   documented one. It would also make every positional assertion in
+   `tests/collision.test.ts` an approximation: the jump-apex test is written
+   with **no tolerance** and derives its expectation from the documented
+   integration scheme, which only stays exact if horizontal velocity is what the
+   intent says it is.
+
+2. **An unobstructed displacement is applied as one addition; substeps are used
+   only where contact has to be located.** Clearance is tested once over the
+   swept **union** of the start and end boxes. If that whole range is clear, the
+   position moves by a single addition — bit-identical to the documented Euler
+   sequence, which is exactly what the no-tolerance apex assertion requires.
+   Subdividing a clear move would reach the same distance through a different
+   sequence of floating-point additions and diverge in the last bits. Where the
+   union *is* obstructed, the sweep is walked in steps of at most `MAX_SUBSTEP`,
+   so a fall at terminal velocity (78 b/s × 0.05 s = 3.9 blocks per tick) cannot
+   step over a one-block wall between two contact tests, and the blocking cell's
+   face is then solved for exactly rather than approximated. Touching is not
+   overlapping — every contact test is strict — which is what makes
+   "stops at `y = floor`" an exact equality instead of an epsilon.
+
+3. **Swim-up composes from the two documented numbers.** In water, holding the
+   jump binding sets `vy = JUMP_VELOCITY × SWIM_SPEED_FACTOR` and horizontal
+   speed is scaled by the same `0.4`. Space is bound to "Jump / swim up" in
+   `contracts/input-bindings.md`, there is no ground to push off underwater, and
+   the spec states no separate swim-up velocity — so deriving it from the two
+   values the spec *does* state keeps it out of the realm of invented numbers.
+
+**Rationale.** The whole point of a *deterministic* sandbox is that one tick over
+one world always produces the same position. Every choice above is a refusal to
+add a rule the specification did not state, or a refusal to compute a documented
+rule in a way that loses exactness.
+
+**Blast radius.** `src/core/GameConfig.ts` (`PLAYER`, `PHYSICS`),
+`src/player/Collision.ts`, `src/player/Physics.ts`, and every assertion in
+`tests/collision.test.ts`.
+
+**Revisit if:** a later phase introduces acceleration — the horizontal path in
+`applyHorizontal` is the single place velocity is written from intent, and the
+apex test would need its no-tolerance assertion re-examined only if the *vertical*
+scheme changed, not if a ramp is added horizontally.
+
+---
+
+### TD-033 · Composition-root wiring: noon at boot, spawn facing the world, look on the tick, `ui.*` past the pause gate
+
+**Context.** Four decisions fell to `src/main.ts` and `src/input/InputManager.ts`
+because no specification text covers them, and each has a wrong answer that
+compiles cleanly.
+
+**Decision.**
+
+1. **Boot lighting is the noon row of `LIGHTING_KEYFRAMES`.** FR-027's
+   *interpolation* is a later phase (`rendering/Sky.ts`), but the keyframes
+   themselves already exist in `GameConfig`, and `Renderer.applyLighting` was
+   already written to take them. Calling it once with the `noon` row at boot
+   means the game opens in daylight instead of against the clear colour's default
+   black — which reads as a renderer that failed rather than a sky cycle that has
+   not arrived. Reading the row rather than a literal keeps one source of
+   configuration (Constitution III), and the handover is clean: `Sky.ts` calls
+   the same method per tick with interpolated values in place of this one fixed
+   call.
+
+2. **Spawn faces the world's centre.** `data-model.md` §2 fixes the spawn
+   *position* — column `(0, 0)` — and says nothing about heading. Because the
+   playable extent is a finite 16 × 16-region grid, `(0, 0)` is a **corner**, and
+   `Player`'s default yaw 0 faces −Z: off the edge of the map. The first frame
+   would contain only sky. The heading is computed with one `atan2` toward the
+   centre rather than hardcoded, because the spiral spawn rule of T094 can walk
+   outward from `(0, 0)` before it finds a non-water surface, and the direction
+   that counts as "inward" moves with it.
+
+3. **Mouse look is consumed on the tick, not on the frame.** `player.yaw` and
+   `player.pitch` are aim state: the FR-010 raycast reads them to decide which
+   cell a break or place targets. Sampling look at frame rate would make block
+   targeting depend on frame timing, so Principle II keeps it in `onTick` —
+   events accumulate between ticks and are applied once, which is also why the
+   camera's view updates at 20 Hz like everything else the simulation owns.
+
+4. **`ui.*` actions pass the pause gate; gameplay actions do not.** The input
+   contract's invariant 5 says key events never reach *the world* while paused,
+   and `InputManager` enforces that — but a blanket return on `#paused` also
+   swallowed Escape, so the press that opened the pause screen could never
+   dismiss it (FR-032's `paused[pause]` → `playing`). Dropping gameplay actions
+   wholesale while letting the `ui.` prefix through satisfies the invariant
+   literally and leaves the pause screen reachable. Held gameplay inputs are
+   still cleared by `markPaused()`, so nothing leaks into the world on resume.
+
+**Rationale.** Each of these is invisible in review and obvious in use: a black
+first frame, a camera facing nothing, aim that varies with frame rate, or a
+player permanently stuck behind a pause overlay that does not exist yet.
+
+**Blast radius.** `src/main.ts`, `src/input/InputManager.ts`. Items 1 and 2 are
+superseded in place — item 1 by `Sky.ts` and item 2 by T094's spiral spawn rule
+— without either later task needing to undo them.
+
+**Revisit if:** spawn ever starts at a column where "toward the centre" is a
+degenerate direction, or if a later phase decides aim must be frame-accurate for
+responsiveness (which would require re-deriving the raycast so it does not feed
+frame timing back into the simulation).

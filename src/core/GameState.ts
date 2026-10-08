@@ -30,6 +30,33 @@ export type GameMode = 'menu' | 'playing' | 'paused'
 /** The two screens `paused` may hold — never both at once (FR-032). */
 export type PausedScreen = 'pause' | 'inventory'
 
+/**
+ * Why the simulation paused — FR-009 and FR-037(b).
+ *
+ * The three automatic causes are **identical in state outcome**: each one pauses,
+ * shows the same overlay and stops the simulation. What differs is the copy the
+ * overlay shows, and FR-037(b) is explicit that only the refusal case names its
+ * cause and offers a retry affordance. Recording the cause here — rather than
+ * letting each caller render its own pause — is what keeps "one single pause
+ * path" true: there is still exactly one transition, and the overlay reads a
+ * field to decide what to say.
+ *
+ * `escape` and `inventory` are the player-driven causes, present so a single
+ * `pauseCause` field covers every route into `paused` instead of leaving two of
+ * them reporting `null`.
+ */
+export type PauseCause =
+  /** Pointer capture was refused (FR-037b). */
+  | 'pointer-refused'
+  /** Pointer capture was lost (FR-009). */
+  | 'pointer-lost'
+  /** The game surface lost visibility or focus (FR-009). */
+  | 'surface-hidden'
+  /** Escape opened the pause menu (FR-032). */
+  | 'escape'
+  /** The inventory was opened, which is a paused state (FR-032). */
+  | 'inventory'
+
 /** What an Escape press did, so the caller can route audio, overlay and save. */
 export type EscapeOutcome =
   /** `playing` → `paused[pause]`: the pause overlay must appear. */
@@ -45,6 +72,12 @@ export type TransitionOutcome = 'changed' | 'ignored'
 export class GameState {
   #mode: GameMode = 'menu'
   #screen: PausedScreen | null = null
+  /**
+   * Why the current pause happened, cleared by every route back out of
+   * `paused`. `null` at all times unless the mode is `paused`, so a consumer
+   * cannot read a stale reason for a pause that has already been dismissed.
+   */
+  #cause: PauseCause | null = null
 
   get mode(): GameMode {
     return this.#mode
@@ -53,6 +86,20 @@ export class GameState {
   /** The open paused screen, or `null` whenever the mode is not `paused`. */
   get screen(): PausedScreen | null {
     return this.#screen
+  }
+
+  /**
+   * Why the game is paused, or `null` when it is not.
+   *
+   * This is the *only* thing FR-037(b) lets differ between the three automatic
+   * causes: they share one transition, one overlay and one stopped simulation,
+   * and the overlay reads this field to decide whether to name a refusal and
+   * offer a retry affordance. Reading it while `playing` yields `null` rather
+   * than the cause of the previous pause, because {@link GameState.#to} clears
+   * it on the way out.
+   */
+  get pauseCause(): PauseCause | null {
+    return this.#cause
   }
 
   get isMenu(): boolean {
@@ -91,24 +138,38 @@ export class GameState {
   /**
    * Open the pause menu. Only reachable from `playing` — FR-032's "the pause
    * menu is reachable only by pressing Escape again once play has resumed".
+   *
+   * @param cause what brought the player here; defaults to `escape` because
+   *              that is the only route that does not name one
    */
-  openPauseMenu(): TransitionOutcome {
+  openPauseMenu(cause: PauseCause = 'escape'): TransitionOutcome {
     if (this.#mode !== 'playing') return 'ignored'
+    this.#cause = cause
     this.#to('paused', 'pause')
     return 'changed'
   }
 
   /**
-   * FR-009's single pause path: pointer refused, pointer lost and surface hidden
-   * all arrive here. Always shows the pause screen, never the inventory.
+   * FR-009's single pause path: pointer refused, pointer lost and surface
+   * hidden all arrive here, through this one method, and none of them has a
+   * private route into `paused`.
+   *
+   * Always shows the pause screen, never the inventory, so the three causes are
+   * identical in state outcome and differ only in the `pauseCause` the overlay
+   * reads (FR-037(b)). An attempt while already paused is ignored rather than
+   * re-entered — losing pointer capture over an open inventory must not swap
+   * the inventory for the pause menu beneath the player.
+   *
+   * @param cause which of the three automatic events fired
    */
-  autoPause(): TransitionOutcome {
-    return this.openPauseMenu()
+  autoPause(cause: PauseCause): TransitionOutcome {
+    return this.openPauseMenu(cause)
   }
 
   /** Open the inventory from play (FR-032). */
   openInventory(): TransitionOutcome {
     if (this.#mode !== 'playing') return 'ignored'
+    this.#cause = 'inventory'
     this.#to('paused', 'inventory')
     return 'changed'
   }
@@ -137,7 +198,7 @@ export class GameState {
    */
   escape(): EscapeOutcome {
     if (this.#mode === 'playing') {
-      this.#to('paused', 'pause')
+      this.openPauseMenu('escape')
       return 'opened-pause'
     }
     if (this.#mode === 'paused') {
@@ -162,5 +223,10 @@ export class GameState {
   #to(mode: GameMode, screen: PausedScreen | null): void {
     this.#mode = mode
     this.#screen = mode === 'paused' ? screen : null
+    // Leaving `paused` forgets why it was entered, so `pauseCause` can never
+    // report a pause that has already been dismissed. Entering it leaves the
+    // cause set by whoever opened the screen, which is why this runs *after*
+    // the caller has assigned one.
+    if (mode !== 'paused') this.#cause = null
   }
 }

@@ -43,7 +43,7 @@ specs/            the Spec Kit artifacts this implementation is built against
 
 | Document | Purpose |
 |---|---|
-| `specs/001-voxel-realms-game/spec.md` | Requirements — 45 FRs, 14 SCs, 7 stories |
+| `specs/001-voxel-realms-game/spec.md` | Requirements — 46 FRs, 14 SCs, 7 stories |
 | `specs/001-voxel-realms-game/plan.md` | Implementation plan and constitution check |
 | `specs/001-voxel-realms-game/quickstart.md` | 10-step manual walkthrough and acceptance evidence |
 | `docs/ARCHITECTURE.md` | How the subsystems fit together |

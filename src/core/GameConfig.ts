@@ -59,6 +59,38 @@ const STEP_UP_HEIGHT = 1
 /** Blocks, measured from the player's eye (FR-010, FR-012). */
 const REACH = 5.0
 
+/**
+ * Player body and locomotion — source prompt §3, carried over because
+ * `spec.md` does not quantify them (TD-032).
+ *
+ * The specification fixes *what* the body must do — stop at terrain (FR-006),
+ * step one block (FR-007), swim at 40% (FR-008) — but never says how wide or
+ * tall the player is, nor how fast "normal movement speed" is that 40% applies
+ * to. The prompt does, so those values are adopted verbatim rather than
+ * re-invented: they are the only documented source for them.
+ */
+const PLAYER_WIDTH = 0.6
+const PLAYER_HEIGHT = 1.8
+const EYE_HEIGHT = 1.62
+/** Ground locomotion in blocks per second; sprint is strictly faster than walking. */
+const WALK_SPEED = 4.3
+const SPRINT_SPEED = 5.6
+/** A fall never accelerates past this (source prompt §3). */
+const TERMINAL_VELOCITY = 78
+/**
+ * Contact granularity (source prompt §8): no single collision substep may move
+ * further than this, so a fall at terminal velocity cannot sweep through a
+ * one-block wall between two contact tests.
+ *
+ * The cap governs *where contact is searched for*, not how an unobstructed
+ * displacement is applied — see TD-032 for why those two must differ, the
+ * second being what keeps the jump trajectory bit-identical to the documented
+ * integration scheme the no-tolerance apex assertion compares against.
+ */
+const MAX_SUBSTEP = 0.25
+/** A gap no larger than this counts as resting on a surface (prompt §8 epsilon). */
+const CONTACT_EPSILON = 0.0001
+
 /** Fixed slot count — the hotbar being the first 9 (data-model §3). */
 const INVENTORY_SLOT_COUNT = 36
 const HOTBAR_SLOT_COUNT = 9
@@ -209,9 +241,34 @@ export const PHYSICS = Object.freeze({
   SWIM_SPEED_FACTOR,
   STEP_UP_HEIGHT,
   REACH,
+  /** Downward speed never exceeds this on a long fall (TD-032). */
+  TERMINAL_VELOCITY,
+  /** Contact search granularity, in blocks (TD-032). */
+  MAX_SUBSTEP,
+  /** Distance probed downward to decide whether the player is standing (TD-032). */
+  CONTACT_EPSILON,
   // Deliberately NO jump-apex constant here: the collision test must derive the
   // expected apex from the scheme above (v² / 2g), not read it back from the
   // implementation — clarify 2026-10-05 Q5.
+})
+
+/**
+ * The player's body and its locomotion — `data-model.md` §2, FR-006, FR-007.
+ *
+ * `data-model.md` §2 lists the *persisted* player fields; the body box and the
+ * speeds below are not among them because a save never carries them (they are
+ * constants, not state). `HALF_WIDTH` is computed rather than restated so a
+ * change to `WIDTH` cannot leave collision offsets a block out of step.
+ */
+export const PLAYER = Object.freeze({
+  WIDTH: PLAYER_WIDTH,
+  /** What collision offsets by, and what the test derives its expected face from. */
+  HALF_WIDTH: PLAYER_WIDTH / 2,
+  HEIGHT: PLAYER_HEIGHT,
+  /** Feet to eye — FR-010 measures reach "from the player's eye". */
+  EYE_HEIGHT,
+  WALK_SPEED,
+  SPRINT_SPEED,
 })
 
 export const HEALTH = Object.freeze({

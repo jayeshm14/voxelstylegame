@@ -9,10 +9,11 @@
   <body>
     <div id="app"></div>
     <!--
-      No module script yet: Phase 1 ships an empty project so that
-      `npm run build` proves the toolchain rather than the game. The entry
-      script is added alongside the composition root — recorded as an open
-      choice in docs/TECHNICAL_DECISIONS.md.
+      The single module entry point. It resolves to `src/main.ts`, the
+      composition root, and nowhere else in `src/` starts a loop or attaches a
+      listener at module scope (FR-046). TD-003 recorded the decision not to
+      ship one in Phase 1; it is now resolved.
     -->
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

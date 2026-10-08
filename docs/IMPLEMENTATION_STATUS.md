@@ -100,6 +100,55 @@ Two corrections to earlier records, made here rather than by rewriting them:
 
 Open choices recorded by this closure: **TD-023 … TD-031**.
 
+```text
+PHASE 6: DONE | typecheck PASS | tests PASS (57 passed) | build PASS
+```
+
+Recorded 2026-10-08 by T047 (source phase 6 — input, player, physics,
+collision, composition root). `57 passed` is the real vitest count across the
+six suites now present: `coordinate` (12), `chunk-purity` (15), `golden-hash`
+(6), `seed-reproducibility` (4), `mesher` (10) and `collision` (10). Gate
+executed in the constitution's order — `npm run typecheck` exit 0 with no
+diagnostics, `npm test` exit 0, `npm run build` exit 0 (`26 modules transformed`,
+`dist/index.html 0.66 kB`, grown from 0.57 kB by the module script T134 adds).
+
+Test-first order held: `tests/collision.test.ts` was written at T039 **before
+any player code existed** and observed failing (`Failed to load url
+../src/player/Player`), then stayed red through T040–T045 until `Physics.ts`
+landed — all ten went green together at T046.
+
+The load-bearing test is the jump-apex case: the expected value is derived
+*inside the test* from semi-implicit Euler at `dt = 0.05`, `g = 32`, `v0 = 10`
+and asserted with **no tolerance** against the implementation. It caught one
+real bug on the way: the swept collision box was being *translated* rather than
+unioned with its starting box, so a 100-block displacement read the cells past
+the floor and was applied whole straight through it. Fixed by `sweepUnion`;
+the apex still matches the derived scheme bit for bit.
+
+T134 was verified in a browser rather than by the build alone: `npm run preview`
+boots straight into a generated world with no menu, `mode` reads `playing`, 49
+regions stream in, and the frame draws 87 draw calls / ~193k triangles of
+terrain — grass terraces, trees, sand and stone under the noon sky, with
+per-face shading from TD-024 visible on every block. Two things had to be
+decided to make that first frame honest and are recorded as **TD-033**: the
+clear colour is black until FR-027 lands, so boot takes its light from the
+`noon` row of `LIGHTING_KEYFRAMES`, and spawn sits at the world's `(0, 0)`
+*corner* where the default yaw faces off the edge of the map, so the player is
+turned toward the centre.
+
+Corrections and notes for this closure:
+
+- `docs/ARCHITECTURE.md` stated the collision order as "resolve X, then Z,
+  then Y" — the sole outlier against the prompt, `tasks.md` T043 and `plan.md`,
+  all of which say **Y → X → Z**. The prose was wrong, not the code; it is
+  corrected here rather than by rewriting a prior phase's record.
+- `contracts/input-bindings.md` and `contracts/settings-schema.md` reference
+  `tests/input.test.ts` and `tests/settings.test.ts`, but **no task creates
+  either suite** — a pre-existing gap between the contracts and `tasks.md`,
+  raised for the implement report rather than closed by this phase.
+
+Open choices recorded by this closure: **TD-032 … TD-033**.
+
 ## Fixes and notes
 
 *(recorded by T115 for every failing suite diagnosed)*
